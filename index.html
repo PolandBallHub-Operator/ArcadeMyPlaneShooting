@@ -1,0 +1,2169 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>マイ海戦19xx - レトロドット海戦シューティング</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <style>
+        :root {
+            --pixel-size: 4px;
+            --color-bg: #0c101b;
+            --color-border: #ffffff;
+            --color-primary: #ffd700;
+            --color-accent: #ff4500;
+            --color-text: #ffffff;
+            --color-panel: #1a2238;
+            --font-pixel: 'DotGothic16', 'Press Start 2P', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            margin: 0;
+            padding: 0;
+            image-rendering: pixelated;
+        }
+
+        body {
+            background-color: #05070a;
+            color: var(--color-text);
+            font-family: var(--font-pixel);
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* 画面全体のコンテナ */
+        #app-container {
+            position: relative;
+            width: 100%;
+            max-width: 500px;
+            height: 100%;
+            background-color: var(--color-bg);
+            border-left: 4px solid #334e68;
+            border-right: 4px solid #334e68;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* ドット風パネル・ウインドウ */
+        .nes-panel {
+            background-color: var(--color-panel);
+            border: 4px solid var(--color-border);
+            border-radius: 0;
+            box-shadow: 0 4px 0 #000;
+            padding: 16px;
+            margin: 10px;
+            position: relative;
+        }
+
+        .nes-btn {
+            background-color: #243b55;
+            color: var(--color-text);
+            border: 4px solid var(--color-border);
+            padding: 10px 16px;
+            font-family: var(--font-pixel);
+            font-size: 14px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 #000;
+            text-align: center;
+            display: inline-block;
+            transition: transform 0.1s;
+        }
+
+        .nes-btn:active {
+            transform: translateY(4px);
+            box-shadow: none;
+        }
+
+        .nes-btn.primary {
+            background-color: #20639b;
+        }
+
+        .nes-btn.success {
+            background-color: #3caea3;
+        }
+
+        .nes-btn.warning {
+            background-color: #f6d55c;
+            color: #000;
+        }
+
+        .nes-btn.danger {
+            background-color: #ed553b;
+        }
+
+        .nes-input {
+            width: 100%;
+            background-color: #000;
+            color: #fff;
+            border: 4px solid var(--color-border);
+            padding: 8px;
+            font-family: var(--font-pixel);
+            outline: none;
+            margin-bottom: 12px;
+        }
+
+        /* ヘッダー */
+        header {
+            height: 50px;
+            background-color: #101524;
+            border-bottom: 4px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px;
+            font-size: 14px;
+            z-index: 10;
+        }
+
+        /* メインビューポート */
+        #viewport {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 各種画面の切り替え */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+
+        /* タイトル画面 */
+        #screen-title {
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: linear-gradient(#0c101b, #1b2845);
+        }
+
+        .title-logo {
+            font-family: 'Press Start 2P', var(--font-pixel);
+            font-size: 28px;
+            color: #ffd700;
+            text-shadow: 4px 4px 0 #000;
+            margin-bottom: 20px;
+            animation: bounce 2s infinite alternate;
+        }
+
+        @keyframes bounce {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(-10px); }
+        }
+
+        .title-sub {
+            font-size: 16px;
+            color: #ff4500;
+            margin-bottom: 40px;
+            letter-spacing: 2px;
+        }
+
+        /* ゲームプレイ画面 */
+        #screen-game {
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #game-canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #0b2240;
+        }
+
+        /* コントロールパッド (モバイル用) */
+        #touch-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 20px;
+            pointer-events: none;
+            z-index: 20;
+        }
+
+        .touch-btn {
+            width: 60px;
+            height: 60px;
+            background-color: rgba(255,255,255,0.2);
+            border: 4px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            color: #fff;
+            font-weight: bold;
+            font-size: 20px;
+        }
+
+        .touch-btn:active {
+            background-color: rgba(255,255,255,0.5);
+        }
+
+        /* 広告枠 */
+        #ad-banner {
+            height: 52px;
+            background-color: #000;
+            border-top: 4px solid #ed553b;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 4px;
+            font-size: 11px;
+            z-index: 30;
+            cursor: pointer;
+            text-decoration: none;
+            color: #f6d55c;
+        }
+
+        #ad-banner:hover {
+            background-color: #111;
+        }
+
+        .ad-text-main {
+            font-weight: bold;
+            color: #ff4500;
+        }
+
+        .ad-text-sub {
+            font-size: 9px;
+            color: #00ffcc;
+        }
+
+        /* プロフィール画像プレビュー */
+        .profile-avatar-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 12px;
+        }
+
+        .avatar-preview {
+            width: 64px;
+            height: 64px;
+            border: 4px solid #fff;
+            background-color: #111;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .avatar-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            image-rendering: pixelated;
+        }
+
+        /* タブシステム */
+        .tab-buttons {
+            display: flex;
+            border-bottom: 4px solid #fff;
+            background-color: #111;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px;
+            background: none;
+            border: none;
+            color: #888;
+            font-family: var(--font-pixel);
+            font-size: 12px;
+            cursor: pointer;
+            text-align: center;
+        }
+
+        .tab-btn.active {
+            color: #fff;
+            background-color: var(--color-panel);
+            border-top: 4px solid #fff;
+            border-left: 4px solid #fff;
+            border-right: 4px solid #fff;
+            margin-bottom: -4px;
+        }
+
+        /* リストアイテム */
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #0c101b;
+            border: 2px solid #555;
+            padding: 8px;
+            margin-bottom: 6px;
+        }
+
+        .badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border: 1px solid #fff;
+            border-radius: 4px;
+        }
+
+        .badge.online {
+            border-color: #00ffcc;
+            color: #00ffcc;
+        }
+
+        .badge.offline {
+            border-color: #888;
+            color: #888;
+        }
+
+        /* ポップアップモーダル */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 20px;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--color-panel);
+            border: 4px solid var(--color-border);
+            width: 100%;
+            max-width: 400px;
+            padding: 16px;
+            box-shadow: 0 10px 0 #000;
+        }
+
+        /* カスタム要素のショップリスト */
+        .shop-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .shop-card {
+            border: 2px solid #fff;
+            padding: 8px;
+            text-align: center;
+            background-color: #0c101b;
+        }
+
+        .shop-card .price {
+            color: #ffd700;
+            font-size: 12px;
+            margin: 6px 0;
+        }
+
+        /* 航空機の選択インジケーター */
+        .plane-select-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            margin-bottom: 12px;
+        }
+
+        .plane-select-box {
+            border: 3px solid #555;
+            padding: 6px 2px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #0c101b;
+            font-size: 11px;
+        }
+
+        .plane-select-box.active {
+            border-color: #ffd700;
+            background-color: #243b55;
+        }
+
+        /* 簡易トースト通知 */
+        #toast {
+            position: absolute;
+            top: 70px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #ff4500;
+            border: 2px solid #fff;
+            padding: 6px 12px;
+            font-size: 12px;
+            z-index: 110;
+            display: none;
+            text-align: center;
+            box-shadow: 0 4px 0 #000;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="app-container">
+        <header>
+            <div id="hdr-logo" style="font-family: 'Press Start 2P'; font-size:11px; color:var(--color-primary);">MY-NAVY 19XX</div>
+            <div id="hdr-coin" style="color:#ffd700;">🪙<span id="player-coins">0</span></div>
+            <div id="hdr-peer-status" class="badge offline" style="font-size: 10px; cursor: pointer;">P2P 未起動</div>
+        </header>
+
+        <div id="toast">通知メッセージ</div>
+
+        <div id="viewport">
+            <!-- 1. タイトル画面 -->
+            <div id="screen-title" class="screen active">
+                <div class="title-logo">マイ海戦19xx</div>
+                <div class="title-sub">~ 空と海の超弩級マルチ共闘 ~</div>
+                
+                <div style="display: flex; flex-direction: column; gap: 15px; width: 80%; max-width: 300px;">
+                    <button class="nes-btn primary" onclick="showScreen('screen-game-select')">出撃する (戦闘開始)</button>
+                    <button class="nes-btn success" onclick="showScreen('screen-multiplay')">マルチプレイ (共闘/フレンド)</button>
+                    <button class="nes-btn" onclick="showScreen('screen-custom')">格納庫 (カスタマイズ)</button>
+                    <button class="nes-btn warning" onclick="showScreen('screen-profile')">プロフィール・データ管理</button>
+                </div>
+            </div>
+
+            <!-- 2. 出撃選択画面 -->
+            <div id="screen-game-select" class="screen">
+                <div class="nes-panel">
+                    <h3 style="color:#00ffcc; margin-bottom: 15px;">作戦選択</h3>
+                    <div style="display:flex; flex-direction:column; gap:12px;">
+                        <button class="nes-btn primary" onclick="startSoloGame()">ソロ作戦開始</button>
+                        <div style="border-top:2px solid #fff; padding-top:10px; margin-top:5px;">
+                            <h4 style="font-size:12px; margin-bottom:8px; color:#ffd700;">フレンドとの共闘</h4>
+                            <p style="font-size:11px; margin-bottom:8px; color:#aaa;">フレンドのロビーに入るか、自分で部屋を立ててください。</p>
+                            <button class="nes-btn success" onclick="showScreen('screen-multiplay')" style="width:100%;">マルチプレイ画面へ</button>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding: 10px; text-align: center;">
+                    <button class="nes-btn danger" onclick="showScreen('screen-title')">戻る</button>
+                </div>
+            </div>
+
+            <!-- 3. ゲームプレイ画面 -->
+            <div id="screen-game" class="screen">
+                <canvas id="game-canvas"></canvas>
+                <!-- スマホ用仮想コントローラー -->
+                <div id="touch-controls">
+                    <div id="btn-shoot" class="touch-btn">SHOT</div>
+                </div>
+                <div style="position: absolute; top: 10px; left: 10px; pointer-events: none; text-shadow: 2px 2px 0 #000; font-size:12px;">
+                    <div>SCORE: <span id="game-score">0</span></div>
+                    <div>HP: <span id="game-hp">100</span></div>
+                    <div id="multiplay-status" style="color:#00ffcc;">ソロプレイ</div>
+                </div>
+                <!-- ゲームオーバー/クリア用ゲーム内モーダル -->
+                <div id="game-result-overlay" style="position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; z-index:40;">
+                    <h2 id="result-title" style="font-size:32px; color:#ffd700; margin-bottom:20px;">GAME OVER</h2>
+                    <p style="font-size:16px; margin-bottom:10px;">獲得コイン: 🪙<span id="result-coins">0</span></p>
+                    <p style="font-size:16px; margin-bottom:30px;">最終スコア: <span id="result-score">0</span></p>
+                    <button class="nes-btn primary" onclick="exitGame()">格納庫へ帰還</button>
+                </div>
+            </div>
+
+            <!-- 4. マルチプレイ（フレンド/共闘）画面 -->
+            <div id="screen-multiplay" class="screen">
+                <div class="tab-buttons">
+                    <button class="tab-btn active" onclick="switchMultiTab('tab-friend')">フレンド</button>
+                    <button class="tab-btn" onclick="switchMultiTab('tab-room')">共闘ルーム</button>
+                </div>
+
+                <!-- フレンドタブ -->
+                <div id="tab-friend" class="tab-content" style="padding:10px;">
+                    <div class="nes-panel" style="margin:5px 0;">
+                        <h4 style="font-size:12px; margin-bottom:6px;">マイ・フレンドコード</h4>
+                        <div style="display:flex; gap:6px;">
+                            <input id="my-peer-id" class="nes-input" style="margin-bottom:0; font-size:11px;" readonly value="生成中...">
+                            <button class="nes-btn" onclick="copyMyPeerID()">コピー</button>
+                        </div>
+                    </div>
+
+                    <div class="nes-panel" style="margin:10px 0 5px 0;">
+                        <h4 style="font-size:12px; margin-bottom:6px;">フレンド追加</h4>
+                        <div style="display:flex; gap:6px;">
+                            <input id="friend-id-input" class="nes-input" style="margin-bottom:0; font-size:11px;" placeholder="友達のコードを入力">
+                            <button class="nes-btn success" onclick="addFriend()">追加</button>
+                        </div>
+                    </div>
+
+                    <h4 style="font-size:12px; margin:10px 0 5px 5px;">フレンド一覧 (オンライン自動確認)</h4>
+                    <div id="friends-list" style="max-height:200px; overflow-y:auto;">
+                        <!-- JSで動的生成 -->
+                    </div>
+                </div>
+
+                <!-- ルーム・共闘タブ -->
+                <div id="tab-room" class="tab-content" style="padding:10px; display:none;">
+                    <div class="nes-panel" style="margin:5px 0;">
+                        <h4 style="color:#00ffcc; margin-bottom:10px;">共闘ルームを作成</h4>
+                        <button class="nes-btn primary" style="width:100%;" onclick="createCoopRoom()">ホストとしてルーム作成</button>
+                    </div>
+
+                    <div class="nes-panel" style="margin:10px 0 5px 0;">
+                        <h4 style="color:#ff4500; margin-bottom:10px;">友達のルームに参加</h4>
+                        <div style="display:flex; gap:6px; margin-bottom:10px;">
+                            <input id="target-room-id" class="nes-input" style="margin-bottom:0; font-size:11px;" placeholder="ホストのフレンドコード">
+                            <button class="nes-btn success" onclick="joinCoopRoom()">参加</button>
+                        </div>
+                    </div>
+
+                    <div id="active-connection-panel" class="nes-panel" style="margin:5px 0; display:none;">
+                        <h4 style="color:#ffd700; margin-bottom:8px;">接続中のプレイヤー</h4>
+                        <div id="connected-users-list"></div>
+                        <button id="btn-start-coop" class="nes-btn primary" style="width:100%; margin-top:10px; display:none;" onclick="startCoopGame()">共闘戦スタート！</button>
+                    </div>
+                </div>
+
+                <div style="padding: 10px; text-align: center; margin-top:auto;">
+                    <button class="nes-btn danger" onclick="showScreen('screen-title')">タイトルに戻る</button>
+                </div>
+            </div>
+
+            <!-- 5. カスタマイズ格納庫画面 -->
+            <div id="screen-custom" class="screen">
+                <div class="nes-panel">
+                    <h3 style="color:#ffd700; margin-bottom:10px;">機体カスタマイズ</h3>
+                    
+                    <p style="font-size:11px; color:#aaa; margin-bottom:6px;">使用する航空機を選択:</p>
+                    <div class="plane-select-container" id="plane-selector">
+                        <div class="plane-select-box active" onclick="selectPlane('de')">de</div>
+                        <div class="plane-select-box" onclick="selectPlane('ja')">ja</div>
+                        <div class="plane-select-box" onclick="selectPlane('us')">us</div>
+                        <div class="plane-select-box" onclick="selectPlane('ru')">ru</div>
+                        <div class="plane-select-box" onclick="selectPlane('uk')">uk</div>
+                    </div>
+
+                    <div style="font-size:12px; margin-bottom:12px; background-color:#111; padding:8px; border:2px solid #fff;">
+                        <span id="selected-plane-info" style="color:#00ffcc;">国籍: DE (ドイツ機/ワイドショット)</span>
+                    </div>
+
+                    <div style="border-top:2px solid #fff; padding-top:10px;">
+                        <h4 style="font-size:13px; color:#ffd700; margin-bottom:8px;">ステータス強化</h4>
+                        <div class="shop-grid">
+                            <div class="shop-card">
+                                <div>主砲威力</div>
+                                <div class="price">LV.<span id="stat-atk-lv">1</span> / 🪙<span id="price-atk">100</span></div>
+                                <button class="nes-btn success" style="padding:4px 8px; font-size:10px;" onclick="upgradeStat('atk')">強化</button>
+                            </div>
+                            <div class="shop-card">
+                                <div>最大HP</div>
+                                <div class="price">LV.<span id="stat-hp-lv">1</span> / 🪙<span id="price-hp">100</span></div>
+                                <button class="nes-btn success" style="padding:4px 8px; font-size:10px;" onclick="upgradeStat('hp')">強化</button>
+                            </div>
+                            <div class="shop-card">
+                                <div>移動速度</div>
+                                <div class="price">LV.<span id="stat-spd-lv">1</span> / 🪙<span id="price-spd">100</span></div>
+                                <button class="nes-btn success" style="padding:4px 8px; font-size:10px;" onclick="upgradeStat('spd')">強化</button>
+                            </div>
+                            <div class="shop-card">
+                                <div>弾速/連射</div>
+                                <div class="price">LV.<span id="stat-rate-lv">1</span> / 🪙<span id="price-rate">100</span></div>
+                                <button class="nes-btn success" style="padding:4px 8px; font-size:10px;" onclick="upgradeStat('rate')">強化</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div style="padding: 10px; text-align: center;">
+                    <button class="nes-btn danger" onclick="showScreen('screen-title')">戻る</button>
+                </div>
+            </div>
+
+            <!-- 6. プロフィール・データ移行画面 -->
+            <div id="screen-profile" class="screen">
+                <div class="nes-panel">
+                    <h3 style="color:#00ffcc; margin-bottom:12px;">ユーザー設定</h3>
+                    
+                    <div class="profile-avatar-container">
+                        <div class="avatar-preview" id="profile-avatar-view">
+                            <span style="font-size:10px;">No Image</span>
+                        </div>
+                        <div>
+                            <p style="font-size:11px; margin-bottom:4px;">アバター画像変更 (JPG/PNG)</p>
+                            <input type="file" id="avatar-input" accept="image/*" style="display:none;" onchange="handleAvatarUpload(event)">
+                            <button class="nes-btn" style="padding:4px 8px; font-size:11px;" onclick="document.getElementById('avatar-input').click()">画像選択</button>
+                        </div>
+                    </div>
+
+                    <label style="font-size:12px; display:block; margin-bottom:4px;">プロフィール名 (英語):</label>
+                    <input id="profile-name-input" class="nes-input" maxlength="15">
+                    <button class="nes-btn success" style="width:100%;" onclick="saveProfileName()">名前を保存</button>
+                </div>
+
+                <div class="nes-panel">
+                    <h3 style="color:#ffd700; margin-bottom:12px;">データ引き継ぎ / 移行</h3>
+                    <p style="font-size:11px; color:#aaa; margin-bottom:10px;">現在の全セーブデータを暗号化文字列としてエクスポートします。他の端末でインポートすることでデータを復元できます。</p>
+                    <button class="nes-btn warning" style="width:100%; margin-bottom:8px;" onclick="exportData()">データを出力する</button>
+                    <button class="nes-btn success" style="width:100%;" onclick="showImportModal()">データをインポートする</button>
+                </div>
+
+                <div style="padding: 10px; text-align: center;">
+                    <button class="nes-btn danger" onclick="showScreen('screen-title')">戻る</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 初回起動時：プロフィール作成ポップアップ -->
+        <div id="modal-first-launch" class="modal-overlay">
+            <div class="modal-content">
+                <h3 style="color:#ffd700; text-align:center; margin-bottom:12px;">新兵登録手続き</h3>
+                <p style="font-size:11px; color:#ccc; margin-bottom:12px;">「マイ海戦19xx」の世界へようこそ！<br>フレンド共闘などで使用するあなたのプロフィール名（半角英語）を決定してください。</p>
+                <input id="first-username" class="nes-input" placeholder="新兵の名前(英語)" maxlength="12" value="Pilot">
+                <button class="nes-btn success" style="width:100%;" onclick="submitFirstRegistration()">登録完了して出撃準備</button>
+            </div>
+        </div>
+
+        <!-- インポートダイアログ -->
+        <div id="modal-import" class="modal-overlay">
+            <div class="modal-content">
+                <h3 style="color:#ffd700; margin-bottom:8px;">データ移行インポート</h3>
+                <p style="font-size:11px; color:#ccc; margin-bottom:10px;">コピーしたエクスポート用テキストを以下に貼り付けてください。</p>
+                <textarea id="import-text-area" class="nes-input" style="height:100px; resize:none;" placeholder="ここにデータを貼り付け"></textarea>
+                <div style="display:flex; gap:10px; margin-top:10px;">
+                    <button class="nes-btn danger" style="flex:1;" onclick="hideImportModal()">キャンセル</button>
+                    <button class="nes-btn success" style="flex:1;" onclick="importData()">読み込み</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- データエクスポート出力画面 -->
+        <div id="modal-export" class="modal-overlay">
+            <div class="modal-content">
+                <h3 style="color:#00ffcc; margin-bottom:8px;">エクスポート成功</h3>
+                <p style="font-size:11px; color:#ccc; margin-bottom:10px;">以下のテキストをすべてコピーし、別のデバイスでインポートしてください。</p>
+                <textarea id="export-text-area" class="nes-input" style="height:100px; resize:none;" readonly></textarea>
+                <div style="display:flex; gap:10px;">
+                    <button class="nes-btn" style="flex:1;" onclick="copyExportText()">コピー</button>
+                    <button class="nes-btn danger" style="flex:1;" onclick="document.getElementById('modal-export').classList.remove('active')">閉じる</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- P2Pロビーへのパスワードなど追加要素 -->
+        <div id="modal-coop-waiting" class="modal-overlay">
+            <div class="modal-content" style="text-align:center;">
+                <h3 style="color:#00ffcc; margin-bottom:10px;">共闘接続待機中</h3>
+                <p style="font-size:12px; margin-bottom:15px;" id="coop-wait-msg">友達の接続を待っています...</p>
+                <div class="avatar-preview" style="margin:0 auto 15px auto;" id="coop-opponent-avatar">
+                    <span style="font-size:10px;">待機中</span>
+                </div>
+                <div id="coop-opponent-name" style="font-size:14px; margin-bottom:15px; color:#ffd700;">???</div>
+                <button class="nes-btn danger" style="width:100%;" onclick="cancelCoop()">接続をキャンセル</button>
+            </div>
+        </div>
+
+        <!-- Switch 1943 広告バナー -->
+        <a id="ad-banner" href="https://sites.google.com/view/1943m-way/midway" target="_blank">
+            <div class="ad-text-main">※もっと楽しい、Switchで無料の1943をお勧めします</div>
+            <div class="ad-text-sub">ミッドウェイ海戦の興奮を、大画面でも体験せよ！ (外部サイトへ)</div>
+        </a>
+    </div>
+
+    <script>
+        // --- 定数 & グローバル変数 ---
+        const DB_NAME = 'MyNavy19xxDB';
+        const DB_VERSION = 1;
+        let db = null;
+
+        // ユーザーデータ（デフォルト）
+        let userData = {
+            username: '',
+            peerId: '',
+            avatar: '', // Base64
+            coins: 500,
+            selectedPlane: 'de',
+            stats: {
+                atk: 1,
+                hp: 1,
+                spd: 1,
+                rate: 1
+            },
+            highScore: 0
+        };
+
+        // 国別仕様 (de, ja, us, ru, uk)
+        // de, ja: 枢軸 / us, ru, uk: 連合
+        const PLANE_CONFIG = {
+            de: { name: 'ドイツ機', faction: 'axis', color: '#ff4444', shotType: 'wide', speed: 4 },
+            ja: { name: '日本機', faction: 'axis', color: '#ffffff', shotType: 'laser', speed: 5 },
+            us: { name: 'アメリカ機', faction: 'allies', color: '#4444ff', shotType: 'heavy', speed: 3.5 },
+            ru: { name: 'ソ連機', faction: 'allies', color: '#ffcc00', shotType: 'homing', speed: 4.5 },
+            uk: { name: 'イギリス機', faction: 'allies', color: '#00cccc', shotType: 'rapid', speed: 4.2 }
+        };
+
+        // --- 飛行機アセット（画像ファイル）の読み込み ---
+        const planeImages = {};
+        const countries = ['de', 'ja', 'us', 'ru', 'uk'];
+        
+        function preloadPlaneAssets() {
+            countries.forEach(code => {
+                const img = new Image();
+                img.src = `assets/${code}.png`;
+                img.onload = () => {
+                    planeImages[code] = img;
+                };
+                img.onerror = () => {
+                    console.warn(`アセット assets/${code}.png が見つからないため、自動生成ピクセルフォールバックを使用します。`);
+                };
+            });
+        }
+
+        // PeerJS 関連
+        let peer = null;
+        let p2pConnection = null;
+        let activeFriends = []; // フレンドの配列
+        let connectionRole = ''; // 'host' or 'guest'
+        let p2pActive = false;
+
+        // ゲームステート
+        let isGameRunning = false;
+        let gameScore = 0;
+        let gameHP = 100;
+        let keys = {};
+        let isTouchShooting = false;
+        let gameLoopId = null;
+
+        // --- IndexedDB の初期化 ---
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                request.onerror = (e) => reject(e);
+                request.onsuccess = (e) => {
+                    db = e.target.result;
+                    resolve(db);
+                };
+                request.onupgradeneeded = (e) => {
+                    const database = e.target.result;
+                    if (!database.objectStoreNames.contains('user')) {
+                        database.createObjectStore('user', { keyPath: 'id' });
+                    }
+                    if (!database.objectStoreNames.contains('friends')) {
+                        database.createObjectStore('friends', { keyPath: 'peerId' });
+                    }
+                };
+            });
+        }
+
+        async function loadUserData() {
+            return new Promise((resolve) => {
+                const transaction = db.transaction(['user'], 'readonly');
+                const store = transaction.objectStore('user');
+                const request = store.get('main');
+                request.onsuccess = (e) => {
+                    if (e.target.result) {
+                        userData = e.target.result;
+                        resolve(true);
+                    } else {
+                        resolve(false); // 初回起動
+                    }
+                };
+                request.onerror = () => resolve(false);
+            });
+        }
+
+        async function saveUserData() {
+            return new Promise((resolve) => {
+                const transaction = db.transaction(['user'], 'readwrite');
+                const store = transaction.objectStore('user');
+                userData.id = 'main';
+                const request = store.put(userData);
+                request.onsuccess = () => {
+                    updateHdrUI();
+                    resolve(true);
+                };
+            });
+        }
+
+        async function loadFriends() {
+            return new Promise((resolve) => {
+                const transaction = db.transaction(['friends'], 'readonly');
+                const store = transaction.objectStore('friends');
+                const request = store.getAll();
+                request.onsuccess = (e) => {
+                    activeFriends = e.target.result || [];
+                    resolve(activeFriends);
+                };
+            });
+        }
+
+        async function saveFriend(friend) {
+            return new Promise((resolve) => {
+                const transaction = db.transaction(['friends'], 'readwrite');
+                const store = transaction.objectStore('friends');
+                const request = store.put(friend);
+                request.onsuccess = () => resolve(true);
+            });
+        }
+
+        // --- 画面遷移制御 ---
+        function showScreen(screenId) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(screenId).classList.add('active');
+
+            if (screenId === 'screen-custom') {
+                updateGarageUI();
+            } else if (screenId === 'screen-profile') {
+                updateProfileUI();
+            } else if (screenId === 'screen-multiplay') {
+                renderFriendsList();
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+
+        // --- 初回新兵登録 ---
+        function checkFirstLaunch() {
+            if (!userData.username) {
+                document.getElementById('modal-first-launch').classList.add('active');
+            } else {
+                initPeer();
+            }
+        }
+
+        async function submitFirstRegistration() {
+            const nameInput = document.getElementById('first-username').value.trim();
+            // 英語のみ、記号なしにフィルタリング
+            const safeName = nameInput.replace(/[^A-Za-z0-9]/g, '');
+            if (safeName.length < 3) {
+                alert('3文字以上の英数字で入力してください。');
+                return;
+            }
+
+            userData.username = safeName;
+            // 固有PeerIDの生成
+            const randNum = Math.floor(10000000 + Math.random() * 90000000);
+            userData.peerId = `${safeName}-${randNum}-pbhub-io`;
+
+            await saveUserData();
+            document.getElementById('modal-first-launch').classList.remove('active');
+            showToast(`登録完了！ PeerID: ${safeName}${randNum}+pbhub-io`);
+            
+            initPeer();
+        }
+
+        // --- PeerJS / P2P処理 ---
+        function initPeer() {
+            if (peer) return;
+
+            // Peerコード表示用には + を用いる（仕様）
+            const displayPeerId = userData.peerId.replace(/-/g, '').replace('pbhubio', '+pbhub-io');
+            document.getElementById('my-peer-id').value = displayPeerId;
+
+            // 実際のPeerJS IDルールに合わせて初期化
+            peer = new Peer(userData.peerId, {
+                debug: 1
+            });
+
+            peer.on('open', (id) => {
+                const statusBadge = document.getElementById('hdr-peer-status');
+                statusBadge.innerText = "オンライン";
+                statusBadge.className = "badge online";
+                p2pActive = true;
+                showToast("P2P通信システム起動。フレンド共闘が可能になりました！");
+                startHeartbeatCheck();
+            });
+
+            peer.on('error', (err) => {
+                console.error("PeerJS Error:", err);
+                const statusBadge = document.getElementById('hdr-peer-status');
+                statusBadge.innerText = "オフライン";
+                statusBadge.className = "badge offline";
+                p2pActive = false;
+                
+                if (err.type === 'unavailable-id') {
+                    showToast("IDの重複エラー。新IDを再構成します。");
+                    const randNum = Math.floor(10000000 + Math.random() * 90000000);
+                    userData.peerId = `${userData.username}-${randNum}-pbhub-io`;
+                    saveUserData().then(() => {
+                        peer = null;
+                        initPeer();
+                    });
+                }
+            });
+
+            // 受信接続の処理
+            peer.on('connection', (conn) => {
+                p2pConnection = conn;
+                setupConnectionHandlers(conn);
+            });
+        }
+
+        function setupConnectionHandlers(conn) {
+            conn.on('open', () => {
+                showToast(`${conn.peer.split('-')[0]} と接続しました！`);
+                
+                // 自己プロフィール情報を接続時に即座に送信
+                conn.send({
+                    type: 'PROFILE_SHARE',
+                    username: userData.username,
+                    avatar: userData.avatar,
+                    highScore: userData.highScore
+                });
+            });
+
+            conn.on('data', (data) => {
+                handleP2PMessage(data);
+            });
+
+            conn.on('close', () => {
+                showToast("P2P接続が切断されました。");
+                p2pConnection = null;
+                document.getElementById('modal-coop-waiting').classList.remove('active');
+                if (isGameRunning && connectionRole === 'guest') {
+                    exitGame();
+                }
+            });
+        }
+
+        // P2P メッセージハンドラー
+        function handleP2PMessage(data) {
+            switch (data.type) {
+                case 'PROFILE_SHARE':
+                    // 送ってきた相手の情報をフレンドとしてIndexedDBに自動保存/更新
+                    const friendObj = {
+                        peerId: p2pConnection.peer,
+                        username: data.username,
+                        avatar: data.avatar,
+                        highScore: data.highScore,
+                        lastSeen: Date.now()
+                    };
+                    saveFriend(friendObj).then(() => {
+                        renderFriendsList();
+                    });
+                    
+                    // 共闘ルーム待機中の場合のUIアップデート
+                    const waitModal = document.getElementById('modal-coop-waiting');
+                    if (waitModal.classList.contains('active')) {
+                        document.getElementById('coop-opponent-name').innerText = data.username;
+                        if (data.avatar) {
+                            document.getElementById('coop-opponent-avatar').innerHTML = `<img src="${data.avatar}">`;
+                        }
+                        document.getElementById('coop-wait-msg').innerText = "共闘準備完了！";
+                        if (connectionRole === 'host') {
+                            document.getElementById('btn-start-coop').style.display = 'block';
+                        }
+                    }
+                    break;
+
+                case 'GAME_COOP_REQ':
+                    // ゲーム開始リクエストが届いた（ゲスト側）
+                    if (confirm(`${p2pConnection.peer.split('-')[0]} から共闘（マルチプレイ）の招待が来ています。参戦しますか？`)) {
+                        connectionRole = 'guest';
+                        p2pConnection.send({ type: 'GAME_COOP_ACCEPT' });
+                        startGuestGame();
+                    }
+                    break;
+
+                case 'GAME_COOP_ACCEPT':
+                    // ゲストがゲームへの参加を承認（ホスト側）
+                    document.getElementById('coop-wait-msg').innerText = "招待が承認されました！スタートしてください。";
+                    document.getElementById('btn-start-coop').style.display = 'block';
+                    break;
+
+                case 'START_GAME_SIGNAL':
+                    // ホストからのゲーム開始合図（ゲスト側）
+                    startGuestGameEngine(data.config);
+                    break;
+
+                case 'GUEST_INPUT':
+                    // ゲストの入力と位置をホストが受け取る
+                    if (coopState) {
+                        coopState.guestX = data.x;
+                        coopState.guestY = data.y;
+                        coopState.guestIsShooting = data.isShooting;
+                        coopState.guestActive = true;
+                    }
+                    break;
+
+                case 'HOST_STATE_SYNC':
+                    // ホストから送られるゲーム状態をゲスト側で反映
+                    if (isGameRunning && connectionRole === 'guest') {
+                        renderGuestCoopState(data.state);
+                    }
+                    break;
+
+                case 'GAME_OVER_SIGNAL':
+                    // ホストからゲームオーバーが宣告された
+                    triggerGameOver(data.score, data.coins);
+                    break;
+            }
+        }
+
+        // --- フレンド管理 & UI ---
+        function addFriend() {
+            let inputId = document.getElementById('friend-id-input').value.trim();
+            if (!inputId) return;
+
+            // 表示形式の + を内部IDの - に変換
+            // 例: test12345678+pbhub-io -> test-12345678-pbhub-io
+            let targetPeerId = inputId;
+            if (inputId.includes('+')) {
+                // pbhub-io の前に数字部分と名前部分を切り離す
+                const base = inputId.split('+')[0]; // test12345678
+                const namePart = base.replace(/[0-9]/g, '');
+                const numPart = base.replace(/[^0-9]/g, '');
+                targetPeerId = `${namePart}-${numPart}-pbhub-io`;
+            }
+
+            if (targetPeerId === userData.peerId) {
+                alert('自分自身をフレンドに追加することはできません。');
+                return;
+            }
+
+            // 新規仮登録
+            const newFriend = {
+                peerId: targetPeerId,
+                username: targetPeerId.split('-')[0] || '不明な新兵',
+                avatar: '',
+                highScore: 0,
+                lastSeen: 0
+            };
+
+            saveFriend(newFriend).then(() => {
+                showToast("フレンドを登録しました。オンライン時に情報が同期されます。");
+                document.getElementById('friend-id-input').value = '';
+                renderFriendsList();
+                // 接続を試行して即座に情報を引っ張る
+                tryToConnectFriend(targetPeerId);
+            });
+        }
+
+        async function renderFriendsList() {
+            const listContainer = document.getElementById('friends-list');
+            listContainer.innerHTML = '';
+            
+            const friends = await loadFriends();
+            if (friends.length === 0) {
+                listContainer.innerHTML = `<div style="text-align:center; padding:20px; font-size:11px; color:#888;">フレンドが登録されていません。</div>`;
+                return;
+            }
+
+            friends.forEach(f => {
+                // 表示用フレンドコード
+                const displayId = f.peerId.replace(/-/g, '').replace('pbhubio', '+pbhub-io');
+                const isOnline = (Date.now() - f.lastSeen) < 30000; // 30秒以内ならオンライン扱い
+
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <div style="width:32px; height:32px; border:2px solid #fff; background-color:#111; overflow:hidden;">
+                            ${f.avatar ? `<img src="${f.avatar}" style="width:100%; height:100%; object-fit:cover;">` : `<span style="font-size:8px;">No</span>`}
+                        </div>
+                        <div>
+                            <div style="font-size:12px;">${f.username}</div>
+                            <div style="font-size:9px; color:#aaa;">HI: ${f.highScore} | ${displayId}</div>
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <span class="badge ${isOnline ? 'online' : 'offline'}" style="margin-bottom:4px; display:inline-block;">
+                            ${isOnline ? 'ONLINE' : 'OFFLINE'}
+                        </span>
+                        <div>
+                            <button class="nes-btn success" style="padding:2px 6px; font-size:9px;" onclick="inviteFriend('${f.peerId}')">共闘</button>
+                        </div>
+                    </div>
+                `;
+                listContainer.innerHTML += item.outerHTML;
+            });
+        }
+
+        function tryToConnectFriend(peerId) {
+            if (!peer || peer.destroyed) return;
+            const conn = peer.connect(peerId);
+            conn.on('open', () => {
+                conn.send({
+                    type: 'PROFILE_SHARE',
+                    username: userData.username,
+                    avatar: userData.avatar,
+                    highScore: userData.highScore
+                });
+                setTimeout(() => conn.close(), 2000); // 同期完了後切断
+            });
+        }
+
+        // 定期的なフレンドオンライン状況更新 (P2Pでの簡易ハートビート)
+        function startHeartbeatCheck() {
+            setInterval(async () => {
+                if (!p2pActive) return;
+                const friends = await loadFriends();
+                friends.forEach(f => {
+                    // 各フレンドに短時間接続を試行してオンラインステータスを更新する
+                    const conn = peer.connect(f.peerId);
+                    conn.on('open', () => {
+                        // 接続できたら即座にlastSeenをアップデート
+                        f.lastSeen = Date.now();
+                        saveFriend(f).then(() => renderFriendsList());
+                        conn.close();
+                    });
+                });
+            }, 20000); // 20秒周期
+        }
+
+        function copyMyPeerID() {
+            const copyText = document.getElementById('my-peer-id');
+            copyText.select();
+            document.execCommand('copy');
+            showToast("フレンドコードをクリップボードにコピーしました！");
+        }
+
+        // --- タブ制御 ---
+        function switchMultiTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            
+            document.getElementById(tabId).style.display = 'block';
+            event.target.classList.add('active');
+        }
+
+        // 共闘ルームのホスト側作成
+        function createCoopRoom() {
+            if (!p2pActive) {
+                alert("P2P通信が初期化されていません。電波状態を確認してください。");
+                return;
+            }
+            connectionRole = 'host';
+            document.getElementById('coop-opponent-name').innerText = "待機中...";
+            document.getElementById('coop-opponent-avatar').innerHTML = `<span style="font-size:10px;">接続待機</span>`;
+            document.getElementById('coop-wait-msg').innerText = "フレンドの参加を待っています...";
+            document.getElementById('btn-start-coop').style.display = 'none';
+            document.getElementById('modal-coop-waiting').classList.add('active');
+        }
+
+        // 共闘ルームへの参加（ゲスト側）
+        function joinCoopRoom() {
+            let targetInput = document.getElementById('target-room-id').value.trim();
+            if (!targetInput) return;
+
+            let hostPeerId = targetInput;
+            if (targetInput.includes('+')) {
+                const base = targetInput.split('+')[0];
+                const namePart = base.replace(/[0-9]/g, '');
+                const numPart = base.replace(/[^0-9]/g, '');
+                hostPeerId = `${namePart}-${numPart}-pbhub-io`;
+            }
+
+            connectionRole = 'guest';
+            showToast("ホストルームへ接続を試みています...");
+            
+            p2pConnection = peer.connect(hostPeerId);
+            setupConnectionHandlers(p2pConnection);
+
+            p2pConnection.on('open', () => {
+                // 接続できたら共闘要求を送信
+                p2pConnection.send({ type: 'GAME_COOP_REQ' });
+                document.getElementById('coop-opponent-name').innerText = hostPeerId.split('-')[0];
+                document.getElementById('coop-wait-msg').innerText = "ホストの承認を待っています...";
+                document.getElementById('modal-coop-waiting').classList.add('active');
+            });
+        }
+
+        function inviteFriend(friendPeerId) {
+            connectionRole = 'host';
+            showToast("フレンドを招待中...");
+            p2pConnection = peer.connect(friendPeerId);
+            setupConnectionHandlers(p2pConnection);
+
+            p2pConnection.on('open', () => {
+                p2pConnection.send({ type: 'GAME_COOP_REQ' });
+                document.getElementById('coop-opponent-name').innerText = friendPeerId.split('-')[0];
+                document.getElementById('coop-wait-msg').innerText = "フレンドの応答を待っています...";
+                document.getElementById('modal-coop-waiting').classList.add('active');
+            });
+        }
+
+        function cancelCoop() {
+            if (p2pConnection) {
+                p2pConnection.close();
+                p2pConnection = null;
+            }
+            document.getElementById('modal-coop-waiting').classList.remove('active');
+        }
+
+        // --- カスタマイズ（格納庫） ---
+        function updateGarageUI() {
+            document.getElementById('player-coins').innerText = userData.coins;
+            
+            // 選択機体マーク
+            document.querySelectorAll('.plane-select-box').forEach(box => {
+                box.classList.remove('active');
+                if (box.innerText.toLowerCase() === userData.selectedPlane) {
+                    box.classList.add('active');
+                }
+            });
+
+            const config = PLANE_CONFIG[userData.selectedPlane];
+            document.getElementById('selected-plane-info').innerText = 
+                `国籍: ${userData.selectedPlane.toUpperCase()} (${config.name} / ${config.shotType === 'wide' ? '広角' : config.shotType === 'laser' ? '貫通レーザー' : config.shotType === 'heavy' ? '重爆弾' : config.shotType === 'homing' ? '誘導魚雷' : '超連射'}弾)`;
+
+            // 強化レベル＆価格表示
+            const stats = ['atk', 'hp', 'spd', 'rate'];
+            stats.forEach(stat => {
+                const currentLv = userData.stats[stat] || 1;
+                document.getElementById(`stat-${stat}-lv`).innerText = currentLv;
+                // レベルごとの価格：100, 200, 400, 800 ...
+                const price = Math.pow(2, currentLv - 1) * 100;
+                document.getElementById(`price-${stat}`).innerText = price;
+            });
+        }
+
+        function selectPlane(planeCode) {
+            userData.selectedPlane = planeCode;
+            saveUserData();
+            updateGarageUI();
+        }
+
+        // ステータス強化
+        function upgradeStat(statType) {
+            const currentLv = userData.stats[statType] || 1;
+            const cost = Math.pow(2, currentLv - 1) * 100;
+
+            if (userData.coins >= cost) {
+                userData.coins -= cost;
+                userData.stats[statType] = currentLv + 1;
+                saveUserData().then(() => {
+                    updateGarageUI();
+                    showToast("ステータスを強化しました！");
+                });
+            } else {
+                alert("コインが足りません！戦闘に出撃して稼ぎましょう。");
+            }
+        }
+
+        // --- プロフィール & データ管理 ---
+        function updateProfileUI() {
+            document.getElementById('profile-name-input').value = userData.username;
+            const avatarView = document.getElementById('profile-avatar-view');
+            if (userData.avatar) {
+                avatarView.innerHTML = `<img src="${userData.avatar}">`;
+            } else {
+                avatarView.innerHTML = `<span style="font-size:10px;">No Image</span>`;
+            }
+        }
+
+        function saveProfileName() {
+            const newName = document.getElementById('profile-name-input').value.trim();
+            const safeName = newName.replace(/[^A-Za-z0-9]/g, '');
+            if (safeName.length < 3) {
+                alert('プロフィール名は3文字以上の英語・数字にしてください。');
+                return;
+            }
+
+            userData.username = safeName;
+            saveUserData().then(() => {
+                showToast("プロフィール名を保存しました！");
+                updateProfileUI();
+            });
+        }
+
+        function handleAvatarUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    // キャンバスを用いて、スマホ負荷軽減＆IndexedDB上限回避のために128x128ピクセルにリサイズ圧縮
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 128;
+                    canvas.height = 128;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, 128, 128);
+                    
+                    userData.avatar = canvas.toDataURL('image/jpeg', 0.7);
+                    saveUserData().then(() => {
+                        updateProfileUI();
+                        showToast("アバター画像を登録しました！");
+                    });
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // --- データ引き継ぎ処理 (Base64) ---
+        function exportData() {
+            const rawString = JSON.stringify(userData);
+            // UTF-8互換のための安全なエンコード
+            const encoded = btoa(unescape(encodeURIComponent(rawString)));
+            
+            document.getElementById('export-text-area').value = encoded;
+            document.getElementById('modal-export').classList.add('active');
+        }
+
+        function copyExportText() {
+            const area = document.getElementById('export-text-area');
+            area.select();
+            document.execCommand('copy');
+            showToast("移行データをコピーしました！");
+        }
+
+        function showImportModal() {
+            document.getElementById('modal-import').classList.add('active');
+        }
+
+        function hideImportModal() {
+            document.getElementById('modal-import').classList.remove('active');
+        }
+
+        function importData() {
+            const code = document.getElementById('import-text-area').value.trim();
+            if (!code) return;
+
+            try {
+                const decoded = decodeURIComponent(escape(atob(code)));
+                const parsed = JSON.parse(decoded);
+                
+                if (parsed.username && parsed.peerId) {
+                    userData = parsed;
+                    saveUserData().then(() => {
+                        hideImportModal();
+                        showToast("セーブデータをインポートしました！再起動します。");
+                        setTimeout(() => location.reload(), 1500);
+                    });
+                } else {
+                    alert("無効な引き継ぎコードデータです。");
+                }
+            } catch (e) {
+                alert("データの復元に失敗しました。文字列が正しいか確認してください。");
+            }
+        }
+
+        // ヘッダーUI更新
+        function updateHdrUI() {
+            document.getElementById('player-coins').innerText = userData.coins;
+        }
+
+
+        // ==========================================
+        //         ゲームエンジン・戦闘部分
+        // ==========================================
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // P2P共闘用同期ステート
+        let coopState = {
+            guestX: 200,
+            guestY: 400,
+            guestIsShooting: false,
+            guestActive: false,
+            guestHP: 100,
+            opponentPlane: 'us'
+        };
+
+        // エンティティ群
+        let player = {
+            x: 150,
+            y: 400,
+            w: 32,
+            h: 32,
+            speed: 4,
+            hp: 100,
+            maxHp: 100,
+            atk: 10,
+            fireCooldown: 0,
+            fireRate: 20 // 周期
+        };
+
+        let enemies = [];
+        let playerBullets = [];
+        let enemyBullets = [];
+        let particles = [];
+        let seaScrollY = 0;
+        let spawnTimer = 0;
+        let giantBattleship = null; // 巨大艦隊
+
+        // スマホタッチ座標
+        let touchX = null;
+        let touchY = null;
+        let isTouching = false;
+
+        // キーボード操作対応
+        window.addEventListener('keydown', e => { keys[e.code] = true; });
+        window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+        // スマホタッチ操作対応
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        function handleTouchStart(e) {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.touches[0].clientX - rect.left;
+            touchY = e.touches[0].clientY - rect.top;
+            isTouching = true;
+        }
+
+        function handleTouchMove(e) {
+            e.preventDefault();
+            if (!isTouching) return;
+            const rect = canvas.getBoundingClientRect();
+            touchX = e.touches[0].clientX - rect.left;
+            touchY = e.touches[0].clientY - rect.top;
+        }
+
+        function handleTouchEnd(e) {
+            e.preventDefault();
+            isTouching = false;
+            touchX = null;
+            touchY = null;
+        }
+
+        // SHOTボタン
+        const shootBtn = document.getElementById('btn-shoot');
+        shootBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isTouchShooting = true;
+        });
+        shootBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isTouchShooting = false;
+        });
+
+        // --- 飛行機・戦闘機描画 ---
+        // 画像アセットから読み込むロジック。ロード失敗した場合はインライン・ピクセル描画にフォールバックします。
+        function drawPixelPlane(ctx, x, y, country, isEnemy, scale = 1.5) {
+            ctx.save();
+            ctx.translate(x, y);
+            if (isEnemy) {
+                ctx.rotate(Math.PI); // 敵機は下向きに
+            }
+
+            // 画像の存在チェック
+            const assetImg = planeImages[country];
+            if (assetImg && assetImg.complete && assetImg.naturalWidth !== 0) {
+                // ドット絵感を損なわないように画像レンダリング設定（ピクセル補間）で描画
+                const size = 32 * scale;
+                ctx.drawImage(assetImg, -size / 2, -size / 2, size, size);
+            } else {
+                // 【フォールバック】アセット画像がない場合は元の32x32ピクセルパターンで描画
+                const config = PLANE_CONFIG[country] || { color: '#ffffff' };
+                const mainColor = config.color;
+                const wingColor = isEnemy ? '#333333' : '#a1a1a1';
+                const cockpitColor = '#00ffff';
+
+                const p = scale; // 仮想ピクセルサイズ
+
+                // 10x11 のグリッド
+                const pixels = [
+                    [0,0,0,0,0,1,0,0,0,0,0],
+                    [0,0,0,0,1,1,1,0,0,0,0],
+                    [0,0,0,0,1,2,1,0,0,0,0],
+                    [0,1,1,1,1,1,1,1,1,1,0],
+                    [1,1,1,1,1,2,1,1,1,1,1],
+                    [0,0,0,1,1,1,1,1,0,0,0],
+                    [0,0,0,0,1,1,1,0,0,0,0],
+                    [0,0,0,1,1,1,1,1,0,0,0],
+                    [0,0,1,1,1,0,1,1,1,0,0],
+                    [0,0,0,0,0,0,0,0,0,0,0]
+                ];
+
+                const startX = - (pixels[0].length * p) / 2;
+                const startY = - (pixels.length * p) / 2;
+
+                for (let r = 0; r < pixels.length; r++) {
+                    for (let c = 0; c < pixels[r].length; c++) {
+                        const type = pixels[r][c];
+                        if (type === 0) continue;
+
+                        if (type === 1) ctx.fillStyle = isEnemy ? '#555555' : mainColor;
+                        if (type === 2) ctx.fillStyle = cockpitColor;
+                        if (type === 3) ctx.fillStyle = wingColor;
+
+                        ctx.fillRect(startX + c*p, startY + r*p, p, p);
+                    }
+                }
+            }
+
+            ctx.restore();
+        }
+
+        // 巨大艦隊の描画 (戦艦/空母)
+        function drawPixelBattleship(ctx, x, y, hp, maxHp) {
+            ctx.save();
+            ctx.translate(x, y);
+
+            // 船体
+            ctx.fillStyle = '#4a5568';
+            ctx.fillRect(-60, -20, 120, 40);
+            
+            // 船首・船尾
+            ctx.beginPath();
+            ctx.moveTo(-60, -20);
+            ctx.lineTo(-85, 0);
+            ctx.lineTo(-60, 20);
+            ctx.closePath();
+            ctx.fillStyle = '#2d3748';
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(60, -20);
+            ctx.lineTo(80, 0);
+            ctx.lineTo(60, 20);
+            ctx.closePath();
+            ctx.fill();
+
+            // 甲板構造物
+            ctx.fillStyle = '#718096';
+            ctx.fillRect(-30, -10, 60, 20);
+            ctx.fillStyle = '#cbd5e0';
+            ctx.fillRect(-10, -5, 20, 10);
+
+            // 砲台
+            ctx.fillStyle = '#1a202c';
+            ctx.fillRect(-45, -6, 12, 12);
+            ctx.fillRect(35, -6, 12, 12);
+
+            // HPゲージ
+            ctx.restore();
+            const pct = hp / maxHp;
+            ctx.fillStyle = '#ff0000';
+            ctx.fillRect(x - 50, y - 40, 100, 6);
+            ctx.fillStyle = '#00ffcc';
+            ctx.fillRect(x - 50, y - 40, 100 * pct, 6);
+        }
+
+        // パーティクル発生
+        function spawnExplosion(x, y, count = 10) {
+            for (let i = 0; i < count; i++) {
+                particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 6,
+                    vy: (Math.random() - 0.5) * 6,
+                    life: 20 + Math.random() * 20,
+                    maxLife: 40,
+                    color: Math.random() > 0.5 ? '#ff4500' : '#ffd700'
+                });
+            }
+        }
+
+        // --- ソロプレイ開始 ---
+        function startSoloGame() {
+            connectionRole = '';
+            showScreen('screen-game');
+            initGameEngine();
+        }
+
+        // --- 共闘スタートプロセス ---
+        // ホスト側：ゲーム開始合図を出し自機ステータスを設定して開始
+        function startCoopGame() {
+            document.getElementById('modal-coop-waiting').classList.remove('active');
+            showScreen('screen-game');
+            
+            // ゲストへのゲーム初期化通知
+            const gameConfig = {
+                hostPlane: userData.selectedPlane,
+                hostStats: userData.stats,
+                seed: Math.random()
+            };
+
+            p2pConnection.send({
+                type: 'START_GAME_SIGNAL',
+                config: gameConfig
+            });
+
+            connectionRole = 'host';
+            initGameEngine(gameConfig);
+        }
+
+        // ゲスト側：ゲーム画面へ遷移して待機
+        function startGuestGame() {
+            document.getElementById('modal-coop-waiting').classList.remove('active');
+            showScreen('screen-game');
+            document.getElementById('multiplay-status').innerText = "共闘中 (GUEST)";
+        }
+
+        function startGuestGameEngine(config) {
+            connectionRole = 'guest';
+            initGameEngine(config);
+        }
+
+        // ==========================================
+        //         ゲームループ & 更新
+        // ==========================================
+        function initGameEngine(config = null) {
+            // キャンバスサイズをスマホ画面にフィットさせる
+            const rect = canvas.parentNode.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            isGameRunning = true;
+            gameScore = 0;
+            
+            // 自機設定のロード
+            const currentPlane = userData.selectedPlane;
+            const baseSpd = PLANE_CONFIG[currentPlane].speed;
+            const atkLv = userData.stats.atk || 1;
+            const hpLv = userData.stats.hp || 1;
+            const spdLv = userData.stats.spd || 1;
+            const rateLv = userData.stats.rate || 1;
+
+            player.x = canvas.width / 2;
+            player.y = canvas.height - 80;
+            player.maxHp = 100 + (hpLv - 1) * 20;
+            player.hp = player.maxHp;
+            player.speed = baseSpd + (spdLv - 1) * 0.4;
+            player.atk = 10 + (atkLv - 1) * 5;
+            player.fireCooldown = 0;
+            player.fireRate = Math.max(8, 25 - (rateLv * 2)); // レベルが上がると連射速度アップ
+
+            // マルチプレイ情報リセット
+            enemies = [];
+            playerBullets = [];
+            enemyBullets = [];
+            particles = [];
+            giantBattleship = null;
+            spawnTimer = 0;
+
+            if (connectionRole === 'host') {
+                document.getElementById('multiplay-status').innerText = "共闘中 (HOST)";
+                coopState.opponentPlane = config ? config.guestPlane : 'us';
+                coopState.guestHP = 100;
+                coopState.guestActive = true;
+            } else if (connectionRole === 'guest') {
+                document.getElementById('multiplay-status').innerText = "共闘中 (GUEST)";
+                coopState.opponentPlane = config ? config.hostPlane : 'de';
+                coopState.guestActive = true;
+            } else {
+                document.getElementById('multiplay-status').innerText = "ソロプレイ";
+            }
+
+            document.getElementById('game-result-overlay').style.display = 'none';
+
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        // 敵の出現テーブル
+        // 国による出現規則
+        // de, ja(枢軸) -> 敵は連合(us, ru, uk)
+        // us, ru, uk(連合) -> 敵は枢軸(de, ja)
+        function spawnEnemyShipOrPlane() {
+            if (connectionRole === 'guest') return; // ゲストは敵を生成しない（同期されるため）
+
+            const playerFaction = PLANE_CONFIG[userData.selectedPlane].faction;
+            let enemyPool = [];
+
+            if (playerFaction === 'axis') {
+                enemyPool = ['us', 'ru', 'uk'];
+            } else {
+                enemyPool = ['de', 'ja'];
+            }
+
+            const chosenEnemyCountry = enemyPool[Math.floor(Math.random() * enemyPool.length)];
+
+            // 一定確率で敵巨大艦が出現
+            if (gameScore > 300 && !giantBattleship && Math.random() < 0.05) {
+                giantBattleship = {
+                    x: canvas.width / 2,
+                    y: -50,
+                    w: 120,
+                    h: 40,
+                    hp: 500,
+                    maxHp: 500,
+                    speed: 0.5,
+                    fireCooldown: 0
+                };
+                showToast("敵・弩級戦艦が出現！艦隊戦開始！");
+                return;
+            }
+
+            // 通常戦闘機
+            enemies.push({
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: -20,
+                w: 24,
+                h: 24,
+                country: chosenEnemyCountry,
+                speed: 1.5 + Math.random() * 2,
+                hp: 15,
+                fireCooldown: Math.random() * 50
+            });
+        }
+
+        // メインループ
+        function gameLoop() {
+            if (!isGameRunning) return;
+
+            updateGame();
+            renderGame();
+
+            // P2P通信同期（ホストのみ状態全体をゲストに送信）
+            if (connectionRole === 'host' && p2pConnection) {
+                p2pConnection.send({
+                    type: 'HOST_STATE_SYNC',
+                    state: {
+                        enemies: enemies,
+                        enemyBullets: enemyBullets,
+                        playerBullets: playerBullets,
+                        score: gameScore,
+                        hostHP: player.hp,
+                        guestHP: coopState.guestHP,
+                        giantBattleship: giantBattleship
+                    }
+                });
+            } else if (connectionRole === 'guest' && p2pConnection) {
+                // ゲストは自分の入力・位置情報のみをホストに送信
+                p2pConnection.send({
+                    type: 'GUEST_INPUT',
+                    x: player.x,
+                    y: player.y,
+                    isShooting: (keys['Space'] || isTouchShooting)
+                });
+            }
+
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        // ゲーム状態の更新
+        function updateGame() {
+            // 背景スクロール
+            seaScrollY = (seaScrollY + 1) % canvas.height;
+
+            if (connectionRole === 'guest') {
+                // ゲスト側は、キーボード・タッチで移動だけ自律計算、当たり判定や敵処理はホストからの同期を待つ
+                handlePlayerMovement();
+                // 簡易弾撃ちエフェクト（見た目だけ）
+                if (player.fireCooldown > 0) player.fireCooldown--;
+                if ((keys['Space'] || isTouchShooting) && player.fireCooldown === 0) {
+                    fireWeaponLocalOnly();
+                }
+                return; 
+            }
+
+            // 以下はソロ、またはマルチプレイのホスト側の処理
+            handlePlayerMovement();
+
+            // ゲスト（共闘プレイヤー）の移動反映
+            if (connectionRole === 'host' && coopState.guestActive) {
+                // ゲストの弾丸発射判定
+                if (coopState.guestIsShooting) {
+                    fireWeaponCoop(coopState.guestX, coopState.guestY);
+                }
+            }
+
+            // 自機攻撃クールダウン
+            if (player.fireCooldown > 0) player.fireCooldown--;
+            if ((keys['Space'] || isTouchShooting) && player.fireCooldown === 0) {
+                fireWeapon(player.x, player.y);
+            }
+
+            // 敵の出現
+            spawnTimer++;
+            if (spawnTimer > 45) {
+                spawnEnemyShipOrPlane();
+                spawnTimer = 0;
+            }
+
+            // 弾丸の更新
+            playerBullets.forEach((b, index) => {
+                b.y += b.vy;
+                b.x += b.vx || 0;
+                if (b.y < -10 || b.x < -10 || b.x > canvas.width + 10) {
+                    playerBullets.splice(index, 1);
+                }
+            });
+
+            enemyBullets.forEach((b, index) => {
+                b.y += b.vy;
+                if (b.y > canvas.height + 10) {
+                    enemyBullets.splice(index, 1);
+                }
+            });
+
+            // 通常敵機の更新
+            enemies.forEach((e, eIndex) => {
+                e.y += e.speed;
+
+                // 敵機射撃
+                e.fireCooldown++;
+                if (e.fireCooldown > 80) {
+                    enemyBullets.push({
+                        x: e.x,
+                        y: e.y + 10,
+                        vy: 4,
+                        w: 6,
+                        h: 6
+                    });
+                    e.fireCooldown = 0;
+                }
+
+                // 画面外脱出
+                if (e.y > canvas.height + 20) {
+                    enemies.splice(eIndex, 1);
+                    return;
+                }
+
+                // 自機との衝突判定
+                if (checkCollide(player, e)) {
+                    player.hp -= 20;
+                    spawnExplosion(e.x, e.y, 8);
+                    enemies.splice(eIndex, 1);
+                    if (player.hp <= 0) gameOver();
+                    return;
+                }
+
+                // ゲスト機との衝突判定 (ホスト側がジャッジ)
+                if (connectionRole === 'host' && coopState.guestActive) {
+                    const guestDummy = { x: coopState.guestX, y: coopState.guestY, w: 32, h: 32 };
+                    if (checkCollide(guestDummy, e)) {
+                        coopState.guestHP -= 20;
+                        spawnExplosion(e.x, e.y, 8);
+                        enemies.splice(eIndex, 1);
+                        if (coopState.guestHP <= 0) coopState.guestHP = 0;
+                        return;
+                    }
+                }
+
+                // 弾丸との当たり判定
+                playerBullets.forEach((b, bIndex) => {
+                    const bDummy = { x: b.x, y: b.y, w: b.w, h: b.h };
+                    if (checkCollide(bDummy, e)) {
+                        e.hp -= player.atk;
+                        playerBullets.splice(bIndex, 1);
+                        if (e.hp <= 0) {
+                            spawnExplosion(e.x, e.y, 12);
+                            enemies.splice(eIndex, 1);
+                            gameScore += 50;
+                        }
+                    }
+                });
+            });
+
+            // 巨大艦隊の更新
+            if (giantBattleship) {
+                if (giantBattleship.y < 80) {
+                    giantBattleship.y += giantBattleship.speed;
+                }
+
+                giantBattleship.fireCooldown++;
+                if (giantBattleship.fireCooldown > 60) {
+                    // 主砲から3方向弾幕
+                    enemyBullets.push({ x: giantBattleship.x - 30, y: giantBattleship.y + 10, vy: 3 });
+                    enemyBullets.push({ x: giantBattleship.x, y: giantBattleship.y + 10, vy: 3.5 });
+                    enemyBullets.push({ x: giantBattleship.x + 30, y: giantBattleship.y + 10, vy: 3 });
+                    giantBattleship.fireCooldown = 0;
+                }
+
+                // 巨大艦への弾丸当たり判定
+                playerBullets.forEach((b, bIndex) => {
+                    const bDummy = { x: b.x, y: b.y, w: b.w, h: b.h };
+                    if (checkCollide(bDummy, giantBattleship)) {
+                        giantBattleship.hp -= player.atk;
+                        playerBullets.splice(bIndex, 1);
+                        if (giantBattleship.hp <= 0) {
+                            spawnExplosion(giantBattleship.x, giantBattleship.y, 35);
+                            giantBattleship = null;
+                            gameScore += 500;
+                            showToast("敵弩級戦艦、撃沈成功！");
+                        }
+                    }
+                });
+            }
+
+            // 敵弾とプレイヤーの当たり判定
+            enemyBullets.forEach((eb, ebIndex) => {
+                const ebDummy = { x: eb.x, y: eb.y, w: eb.w || 6, h: eb.h || 6 };
+                
+                // ホスト機当たり判定
+                if (checkCollide(player, ebDummy)) {
+                    player.hp -= 10;
+                    enemyBullets.splice(ebIndex, 1);
+                    if (player.hp <= 0) gameOver();
+                    return;
+                }
+
+                // ゲスト機当たり判定
+                if (connectionRole === 'host' && coopState.guestActive) {
+                    const guestDummy = { x: coopState.guestX, y: coopState.guestY, w: 32, h: 32 };
+                    if (checkCollide(guestDummy, ebDummy)) {
+                        coopState.guestHP -= 10;
+                        enemyBullets.splice(ebIndex, 1);
+                        if (coopState.guestHP <= 0) coopState.guestHP = 0;
+                    }
+                }
+            });
+
+            // パーティクルの更新
+            particles.forEach((p, index) => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+                if (p.life <= 0) {
+                    particles.splice(index, 1);
+                }
+            });
+
+            // スコアのリアルタイム同期更新
+            document.getElementById('game-score').innerText = gameScore;
+            document.getElementById('game-hp').innerText = player.hp;
+        }
+
+        // 移動ロジック
+        function handlePlayerMovement() {
+            // キーボード移動
+            if (keys['ArrowUp'] || keys['KeyW']) player.y -= player.speed;
+            if (keys['ArrowDown'] || keys['KeyS']) player.y += player.speed;
+            if (keys['ArrowLeft'] || keys['KeyA']) player.x -= player.speed;
+            if (keys['ArrowRight'] || keys['KeyD']) player.x += player.speed;
+
+            // タッチ移動 (指を置いた位置にスムーズに近づく)
+            if (isTouching && touchX !== null && touchY !== null) {
+                const dx = touchX - player.x;
+                const dy = touchY - player.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 5) {
+                    player.x += (dx / dist) * player.speed;
+                    player.y += (dy / dist) * player.speed;
+                }
+            }
+
+            // 画面外制限
+            if (player.x < 16) player.x = 16;
+            if (player.x > canvas.width - 16) player.x = canvas.width - 16;
+            if (player.y < 16) player.y = 16;
+            if (player.y > canvas.height - 16) player.y = canvas.height - 16;
+        }
+
+        // ショット兵器射撃
+        function fireWeapon(startX, startY, isGuest = false) {
+            const country = isGuest ? coopState.opponentPlane : userData.selectedPlane;
+            const config = PLANE_CONFIG[country];
+
+            if (!isGuest) {
+                player.fireCooldown = player.fireRate;
+            }
+
+            if (config.shotType === 'wide') {
+                // 3方向ショット
+                playerBullets.push({ x: startX, y: startY - 10, vy: -7, vx: 0, w: 4, h: 10 });
+                playerBullets.push({ x: startX, y: startY - 10, vy: -6, vx: -2, w: 4, h: 10 });
+                playerBullets.push({ x: startX, y: startY - 10, vy: -6, vx: 2, w: 4, h: 10 });
+            } else if (config.shotType === 'laser') {
+                // 強力貫通レーザー
+                playerBullets.push({ x: startX, y: startY - 15, vy: -12, vx: 0, w: 8, h: 25 });
+            } else if (config.shotType === 'heavy') {
+                // 巨大重爆弾 (低速高火力)
+                playerBullets.push({ x: startX, y: startY - 10, vy: -4, vx: 0, w: 16, h: 16 });
+            } else if (config.shotType === 'homing') {
+                // 左右に魚雷を撃って前方へ
+                playerBullets.push({ x: startX - 10, y: startY, vy: -8, vx: -1, w: 6, h: 10 });
+                playerBullets.push({ x: startX + 10, y: startY, vy: -8, vx: 1, w: 6, h: 10 });
+            } else {
+                // 超高速連射
+                playerBullets.push({ x: startX, y: startY - 10, vy: -10, vx: 0, w: 4, h: 8 });
+            }
+        }
+
+        // ゲストのダミー発射 (見た目のローカル同期用)
+        function fireWeaponLocalOnly() {
+            player.fireCooldown = player.fireRate;
+            playerBullets.push({ x: player.x, y: player.y - 10, vy: -8, vx: 0, w: 4, h: 10 });
+        }
+
+        // ゲストの発射指示（ホスト側が代わりにゲームステート上で弾丸をトリガー）
+        function fireWeaponCoop(startX, startY) {
+            fireWeapon(startX, startY, true);
+        }
+
+        // 矩形当たり判定
+        function checkCollide(rect1, rect2) {
+            return rect1.x - rect1.w / 2 < rect2.x + rect2.w / 2 &&
+                   rect1.x + rect1.w / 2 > rect2.x - rect2.w / 2 &&
+                   rect1.y - rect1.h / 2 < rect2.y + rect2.h / 2 &&
+                   rect1.y + rect1.h / 2 > rect2.y - rect2.h / 2;
+        }
+
+        // ゲスト機での同期描画
+        function renderGuestCoopState(hostState) {
+            enemies = hostState.enemies;
+            enemyBullets = hostState.enemyBullets;
+            playerBullets = hostState.playerBullets;
+            gameScore = hostState.score;
+            coopState.guestHP = hostState.guestHP;
+            player.hp = hostState.hostHP; // ゲスト側の表示用自機HP
+            giantBattleship = hostState.giantBattleship;
+
+            document.getElementById('game-score').innerText = gameScore;
+            document.getElementById('game-hp').innerText = coopState.guestHP; // ゲストの表示
+        }
+
+
+        // ==========================================
+        //              グラフィック描画
+        // ==========================================
+        function renderGame() {
+            // 背景（海原と波しぶきのピクセル描画）
+            ctx.fillStyle = '#0b2240';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // スクロールする波しぶき
+            ctx.fillStyle = '#17365d';
+            for (let i = 0; i < canvas.width; i += 80) {
+                for (let j = -100; j < canvas.height; j += 120) {
+                    ctx.fillRect(i + (j % 40), j + seaScrollY, 12, 4);
+                }
+            }
+
+            // 巨大艦隊の描画
+            if (giantBattleship) {
+                drawPixelBattleship(ctx, giantBattleship.x, giantBattleship.y, giantBattleship.hp, giantBattleship.maxHp);
+            }
+
+            // 敵機レンダリング
+            enemies.forEach(e => {
+                drawPixelPlane(ctx, e.x, e.y, e.country, true);
+            });
+
+            // プレイヤー（ホストまたは自機）の描画
+            if (connectionRole === 'guest') {
+                // ゲスト自身
+                drawPixelPlane(ctx, player.x, player.y, userData.selectedPlane, false);
+                // ホスト（共闘相手）
+                if (coopState.guestActive) {
+                    drawPixelPlane(ctx, coopState.guestX, coopState.guestY, coopState.opponentPlane, false);
+                    // ホスト機のHPバー
+                    ctx.fillStyle = '#00ffcc';
+                    ctx.fillRect(coopState.guestX - 16, coopState.guestY + 20, 32, 4);
+                }
+            } else {
+                // ホスト自身（またはソロプレイ）
+                drawPixelPlane(ctx, player.x, player.y, userData.selectedPlane, false);
+                // ゲスト（共闘相手）
+                if (connectionRole === 'host' && coopState.guestActive) {
+                    drawPixelPlane(ctx, coopState.guestX, coopState.guestY, coopState.opponentPlane, false);
+                    // ゲストのHPバー
+                    ctx.fillStyle = '#ff00ff';
+                    ctx.fillRect(coopState.guestX - 16, coopState.guestY + 20, 32, 4);
+                }
+            }
+
+            // 弾丸の描画
+            playerBullets.forEach(b => {
+                ctx.fillStyle = '#ffff00';
+                ctx.fillRect(b.x - b.w/2, b.y - b.h/2, b.w, b.h);
+            });
+
+            enemyBullets.forEach(b => {
+                ctx.fillStyle = '#ff3300';
+                ctx.fillRect(b.x - 3, b.y - 3, 6, 6);
+            });
+
+            // エフェクトパーティクル
+            particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / p.maxLife;
+                ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        // ==========================================
+        //               ゲームオーバー
+        // ==========================================
+        function gameOver() {
+            if (!isGameRunning) return;
+            isGameRunning = false;
+
+            // コインの計算（スコアの10%）
+            const earnedCoins = Math.floor(gameScore * 0.1);
+            userData.coins += earnedCoins;
+
+            if (gameScore > userData.highScore) {
+                userData.highScore = gameScore;
+                showToast("ハイスコア更新！");
+            }
+
+            saveUserData();
+
+            if (connectionRole === 'host' && p2pConnection) {
+                p2pConnection.send({
+                    type: 'GAME_OVER_SIGNAL',
+                    score: gameScore,
+                    coins: earnedCoins
+                });
+            }
+
+            triggerGameOver(gameScore, earnedCoins);
+        }
+
+        // ゲスト側のゲームオーバー処理
+        function triggerGameOver(score, coins) {
+            isGameRunning = false;
+            document.getElementById('result-score').innerText = score;
+            document.getElementById('result-coins').innerText = coins;
+            document.getElementById('game-result-overlay').style.display = 'flex';
+        }
+
+        function exitGame() {
+            document.getElementById('game-result-overlay').style.display = 'none';
+            showScreen('screen-title');
+            if (p2pConnection) {
+                p2pConnection.close();
+                p2pConnection = null;
+            }
+        }
+
+
+        // ==========================================
+        //              初期化エントリ
+        // ==========================================
+        window.onload = async function() {
+            try {
+                // 画像アセットのプリロードを実行
+                preloadPlaneAssets();
+
+                await initDB();
+                const hasData = await loadUserData();
+                updateHdrUI();
+                checkFirstLaunch();
+            } catch (err) {
+                console.error("IndexedDB startup error:", err);
+                showToast("データベース初期化エラー。");
+            }
+        };
+    </script>
+</body>
+</html>
