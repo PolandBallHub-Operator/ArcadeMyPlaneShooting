@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>マイ海戦19xx - レトロドット海戦シューティング</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,7 +57,7 @@
             overflow: hidden;
         }
 
-        /* ドット風パネル・ウインドウ */
+        /* */
         .nes-panel {
             background-color: var(--color-panel);
             border: 4px solid var(--color-border);
@@ -137,7 +137,7 @@
             flex-direction: column;
         }
 
-        /* 各種画面の切り替え */
+        /* */
         .screen {
             position: absolute;
             top: 0;
@@ -228,9 +228,9 @@
             background-color: rgba(255,255,255,0.5);
         }
 
-        /* 広告枠 */
+        /* 広告枠 (スマホのセーフエリア対応) */
         #ad-banner {
-            height: 52px;
+            height: auto;
             background-color: #000;
             border-top: 4px solid #ed553b;
             display: flex;
@@ -238,12 +238,14 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            padding: 4px;
-            font-size: 11px;
+            padding: 0px 0px;
+            padding-bottom: calc(40px + env(safe-area-inset-bottom));
+            font-size: 15px;
             z-index: 30;
             cursor: pointer;
             text-decoration: none;
             color: #f6d55c;
+            width: 100%;
         }
 
         #ad-banner:hover {
@@ -764,9 +766,10 @@
         let activeFriends = []; // フレンドの配列
         let connectionRole = ''; // 'host' or 'guest' or 'instant_host' or 'instant_guest'
         let p2pActive = false;
+        let isCheckingFriends = false; // ハートビート実行中の排他ロック
 
         // ロビー内のプレイヤーリスト (最大4人)
-        // { peerId, username, avatar, plane, isHost, active, x, y, hp, maxHp, isShooting }
+        // { peerId, username, avatar, plane, isHost, active, x, y, hp, maxHp, isShooting, fireCooldown }
         let lobbyPlayers = [];
 
         // ゲームステート
@@ -899,7 +902,7 @@
             initPeer();
         }
 
-        // --- PeerJS / P2P処理 ---
+        // --- PeerJS / P2P処理 (安定化・自動再接続対応) ---
         function initPeer() {
             if (peer) return;
 
@@ -907,7 +910,13 @@
             document.getElementById('my-peer-id').value = displayPeerId;
 
             peer = new Peer(userData.peerId, {
-                debug: 1
+                debug: 1,
+                config: {
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
             });
 
             peer.on('open', (id) => {
@@ -917,6 +926,16 @@
                 p2pActive = true;
                 showToast("P2P通信システム起動。フレンド共闘が可能になりました！");
                 startHeartbeatCheck();
+            });
+
+            peer.on('disconnected', () => {
+                console.warn("PeerJS disconnected. Attempting to reconnect...");
+                const statusBadge = document.getElementById('hdr-peer-status');
+                statusBadge.innerText = "再接続中";
+                statusBadge.className = "badge offline";
+                if (p2pActive && peer) {
+                    peer.reconnect();
+                }
             });
 
             peer.on('error', (err) => {
@@ -939,6 +958,7 @@
 
             // ホストとして他プレイヤーから接続された時
             peer.on('connection', (conn) => {
+                // すでにアクティブなセッションがあるか、最大人数に達している場合
                 if (connectionRole === 'host' && activeConnections.length >= 3) {
                     conn.on('open', () => {
                         conn.send({ type: 'ROOM_FULL' });
@@ -947,7 +967,11 @@
                     return;
                 }
                 
-                // コネクションを追加保存
+                // 重複接続の防止
+                if (activeConnections.some(c => c.peer === conn.peer)) {
+                    return;
+                }
+
                 activeConnections.push(conn);
                 setupConnectionHandlers(conn);
             });
@@ -979,7 +1003,7 @@
                 lobbyPlayers = lobbyPlayers.filter(p => p.peerId !== conn.peer);
                 updateLobbyUI();
 
-                // ゲーム中かつゲストが切断した場合のゲームオーバーチェック
+                // ゲーム中かつ接続相手が切断した場合のゲーム終了チェック
                 if (isGameRunning) {
                     if (connectionRole === 'guest' || connectionRole === 'instant_guest') {
                         exitGame();
@@ -992,7 +1016,7 @@
             });
         }
 
-        // P2P メッセージハンドラー (4人対応版)
+        // P2P メッセージハンドラー (4人対応・無限弾および被弾同期修正版)
         function handleP2PMessage(conn, data) {
             switch (data.type) {
                 case 'PROFILE_SHARE':
@@ -1034,7 +1058,8 @@
                 case 'INSTANT_COOP_REQ':
                     // 1v1の即時共闘要求が届いた
                     connectionRole = 'instant_guest';
-                    p2pConnection = conn; // ショートカット保持
+                    // ホスト接続のみを活性化
+                    activeConnections = [conn];
                     conn.send({ 
                         type: 'INSTANT_COOP_ACCEPT',
                         username: userData.username,
@@ -1099,7 +1124,6 @@
 
         // --- ロビープレイヤー管理 ---
         function registerLobbyPlayer(peerId, username, avatar, plane, isHost) {
-            // すでにいる場合は更新
             const existing = lobbyPlayers.find(p => p.peerId === peerId);
             if (existing) {
                 existing.username = username;
@@ -1118,7 +1142,8 @@
                     y: 400,
                     hp: 100,
                     maxHp: 100,
-                    isShooting: false
+                    isShooting: false,
+                    fireCooldown: 0 // ゲストの個別射撃クールダウンタイマーを定義
                 });
             }
             updateLobbyUI();
@@ -1129,11 +1154,9 @@
             if (!membersContainer) return;
             membersContainer.innerHTML = '';
 
-            // 最大4枠
             for (let i = 0; i < 4; i++) {
                 const player = lobbyPlayers[i];
                 if (player) {
-                    const dispId = player.peerId.replace(/-/g, '').replace('pbhubio', '+pbhub-io');
                     membersContainer.innerHTML += `
                         <div class="lobby-player-card">
                             <div style="width:48px; height:48px; border:2px solid #fff; margin:0 auto 6px auto; background-color:#111; overflow:hidden; display:flex; align-items:center; justify-content:center;">
@@ -1247,12 +1270,22 @@
             });
         }
 
+        // フレンドペアリング接続（一時接続の競合を徹底排除）
         function tryToConnectFriend(peerId) {
-            if (!peer || peer.destroyed) return;
-            // すでにアクティブ通信している相手はハートビートチェック対象外にする
+            if (!peer || peer.destroyed || !p2pActive) return;
+            
+            // アクティブ接続が確立している相手や、すでに進行中のセッションがある場合はスキップ
             if (activeConnections.some(c => c.peer === peerId)) return;
+            if (isCheckingFriends || isGameRunning || lobbyPlayers.length > 0) return;
 
+            isCheckingFriends = true;
             const conn = peer.connect(peerId);
+            
+            let timeoutId = setTimeout(() => {
+                conn.close();
+                isCheckingFriends = false;
+            }, 3000);
+
             conn.on('open', () => {
                 conn.send({
                     type: 'PROFILE_SHARE',
@@ -1261,26 +1294,64 @@
                     highScore: userData.highScore,
                     plane: userData.selectedPlane
                 });
-                setTimeout(() => conn.close(), 1500);
+                
+                setTimeout(() => {
+                    clearTimeout(timeoutId);
+                    conn.close();
+                    isCheckingFriends = false;
+                }, 1000);
+            });
+
+            conn.on('error', () => {
+                clearTimeout(timeoutId);
+                isCheckingFriends = false;
             });
         }
 
-        // 定期的なフレンドオンライン状況更新
+        // 定期的なフレンドオンライン状況更新 (接続競合の徹底ガード)
         function startHeartbeatCheck() {
             setInterval(async () => {
-                // ロビー待機中やゲーム中のアクティブセッション中の場合はハートビート確認自体をスキップ（重要：切断防止！）
-                if (!p2pActive || isGameRunning || lobbyPlayers.length > 0 || activeConnections.length > 0) return;
+                if (!p2pActive || isGameRunning || lobbyPlayers.length > 0 || activeConnections.length > 0 || isCheckingFriends) {
+                    return;
+                }
 
+                isCheckingFriends = true;
                 const friends = await loadFriends();
-                friends.forEach(f => {
-                    const conn = peer.connect(f.peerId);
-                    conn.on('open', () => {
-                        f.lastSeen = Date.now();
-                        saveFriend(f).then(() => renderFriendsList());
-                        conn.close();
+                
+                // シーケンシャル（順次）に疎通確認し、同時多発的なピア接続バーストを回避
+                for (const f of friends) {
+                    if (isGameRunning || lobbyPlayers.length > 0 || activeConnections.length > 0) break;
+                    
+                    await new Promise((resolve) => {
+                        const conn = peer.connect(f.peerId);
+                        let resolved = false;
+
+                        const timer = setTimeout(() => {
+                            if (!resolved) {
+                                conn.close();
+                                resolve();
+                            }
+                        }, 2000);
+
+                        conn.on('open', () => {
+                            resolved = true;
+                            clearTimeout(timer);
+                            f.lastSeen = Date.now();
+                            saveFriend(f).then(() => renderFriendsList());
+                            conn.close();
+                            resolve();
+                        });
+
+                        conn.on('error', () => {
+                            resolved = true;
+                            clearTimeout(timer);
+                            conn.close();
+                            resolve();
+                        });
                     });
-                });
-            }, 20000); // 20秒周期
+                }
+                isCheckingFriends = false;
+            }, 25000); // 25秒周期
         }
 
         function copyMyPeerID() {
@@ -1356,7 +1427,6 @@
 
             conn.on('open', () => {
                 conn.send({ type: 'INSTANT_COOP_REQ' });
-                // ホスト自身
                 lobbyPlayers = [];
                 registerLobbyPlayer(userData.peerId, userData.username, userData.avatar, userData.selectedPlane, true);
             });
@@ -1732,7 +1802,7 @@
         }
 
         // ==========================================
-        //         ゲームループ & 更新 (4人同期版)
+        //         ゲームループ & 更新
         // ==========================================
         function initGameEngine(config = null) {
             const rect = canvas.parentNode.getBoundingClientRect();
@@ -1825,7 +1895,6 @@
 
             // P2P ブロードキャスト同期
             if (connectionRole.includes('host')) {
-                // ホスト：ゲーム内全オブジェクトと全プレイヤーのステータス（HP, 座標）をゲストへ一斉送信
                 // 自分自身の状態を同期リストに代入
                 const selfState = lobbyPlayers.find(p => p.peerId === userData.peerId);
                 if (selfState) {
@@ -1859,12 +1928,12 @@
             gameLoopId = requestAnimationFrame(gameLoop);
         }
 
-        // ゲームステート更新
+        // ゲームステート更新 (バグ徹底修正)
         function updateGame() {
             seaScrollY = (seaScrollY + 1) % canvas.height;
 
             if (connectionRole.includes('guest')) {
-                // ゲストは完全同期描画されるため、自機の物理座標の移動のみ処理
+                // ゲストは完全同期描画されるため、自機の移動のみ処理
                 handlePlayerMovement();
                 
                 // ローカル表示上の連射エフェクト
@@ -1878,10 +1947,29 @@
             // --- ホスト / ソロ側のゲームシミュレーション ---
             handlePlayerMovement();
 
+            // 衝突判定ターゲットを定義 (ソロなら自機、マルチなら全プレイヤー)
+            let targets = [];
+            if (lobbyPlayers && lobbyPlayers.length > 0) {
+                targets = lobbyPlayers;
+            } else {
+                targets = [{
+                    peerId: 'solo',
+                    x: player.x,
+                    y: player.y,
+                    hp: player.hp,
+                    maxHp: player.maxHp
+                }];
+            }
+
             // 全てのアクティブなゲストプレイヤーの射撃処理
             lobbyPlayers.forEach(p => {
-                if (p.peerId !== userData.peerId && p.isShooting) {
-                    fireWeaponCoop(p.x, p.y, p.plane);
+                if (p.peerId !== userData.peerId) {
+                    if (p.fireCooldown > 0) p.fireCooldown--;
+                    if (p.isShooting && p.fireCooldown === 0) {
+                        fireWeaponCoop(p.x, p.y, p.plane);
+                        const currentRateLv = userData.stats.rate || 1;
+                        p.fireCooldown = Math.max(8, 25 - (currentRateLv * 2));
+                    }
                 }
             });
 
@@ -1899,24 +1987,27 @@
             }
 
             // プレイヤー弾丸移動
-            playerBullets.forEach((b, index) => {
+            for (let bIndex = playerBullets.length - 1; bIndex >= 0; bIndex--) {
+                const b = playerBullets[bIndex];
                 b.y += b.vy;
                 b.x += b.vx || 0;
                 if (b.y < -10 || b.x < -10 || b.x > canvas.width + 10) {
-                    playerBullets.splice(index, 1);
+                    playerBullets.splice(bIndex, 1);
                 }
-            });
+            }
 
             // 敵弾丸移動
-            enemyBullets.forEach((b, index) => {
+            for (let bIndex = enemyBullets.length - 1; bIndex >= 0; bIndex--) {
+                const b = enemyBullets[bIndex];
                 b.y += b.vy;
                 if (b.y > canvas.height + 10) {
-                    enemyBullets.splice(index, 1);
+                    enemyBullets.splice(bIndex, 1);
                 }
-            });
+            }
 
-            // 通常敵機処理
-            enemies.forEach((e, eIndex) => {
+            // 通常敵機処理 & 当たり判定 (安全な逆走査ループ)
+            for (let eIndex = enemies.length - 1; eIndex >= 0; eIndex--) {
+                const e = enemies[eIndex];
                 e.y += e.speed;
 
                 e.fireCooldown++;
@@ -1927,27 +2018,35 @@
 
                 if (e.y > canvas.height + 20) {
                     enemies.splice(eIndex, 1);
-                    return;
+                    continue;
                 }
 
-                // 全プレイヤーと敵機の衝突判定
-                lobbyPlayers.forEach(p => {
+                // 敵機と全ターゲット(プレイヤー)の衝突判定
+                let enemyCollided = false;
+                for (let pIndex = 0; pIndex < targets.length; pIndex++) {
+                    const p = targets[pIndex];
+                    if (p.hp <= 0) continue;
+                    
                     const pDummy = { x: p.x, y: p.y, w: 32, h: 32 };
                     if (checkCollide(pDummy, e)) {
                         p.hp = Math.max(0, p.hp - 20);
                         spawnExplosion(e.x, e.y, 8);
                         enemies.splice(eIndex, 1);
 
-                        // もしホスト本人が倒れたらHP同期
-                        if (p.peerId === userData.peerId) {
+                        // 自機(ソロ or ホスト)に被弾を反映
+                        if (p.peerId === 'solo' || p.peerId === userData.peerId) {
                             player.hp = p.hp;
                             if (player.hp <= 0) gameOver();
                         }
+                        enemyCollided = true;
+                        break; // この敵機は消滅したので走査を抜ける
                     }
-                });
+                }
+                if (enemyCollided) continue;
 
-                // 弾丸当たり判定
-                playerBullets.forEach((b, bIndex) => {
+                // プレイヤーの弾丸と敵機の当たり判定 (安全な逆走査)
+                for (let bIndex = playerBullets.length - 1; bIndex >= 0; bIndex--) {
+                    const b = playerBullets[bIndex];
                     const bDummy = { x: b.x, y: b.y, w: b.w, h: b.h };
                     if (checkCollide(bDummy, e)) {
                         e.hp -= player.atk;
@@ -1957,9 +2056,10 @@
                             enemies.splice(eIndex, 1);
                             gameScore += 50;
                         }
+                        break; // 一発の被弾で判定終了
                     }
-                });
-            });
+                }
+            }
 
             // 弩級戦艦
             if (giantBattleship) {
@@ -1975,7 +2075,8 @@
                     giantBattleship.fireCooldown = 0;
                 }
 
-                playerBullets.forEach((b, bIndex) => {
+                for (let bIndex = playerBullets.length - 1; bIndex >= 0; bIndex--) {
+                    const b = playerBullets[bIndex];
                     const bDummy = { x: b.x, y: b.y, w: b.w, h: b.h };
                     if (checkCollide(bDummy, giantBattleship)) {
                         giantBattleship.hp -= player.atk;
@@ -1986,27 +2087,34 @@
                             gameScore += 500;
                             showToast("敵弩級戦艦、撃沈成功！");
                         }
+                        break;
                     }
-                });
+                }
             }
 
-            // 敵弾幕と全プレイヤーの当たり判定
-            enemyBullets.forEach((eb, ebIndex) => {
+            // 敵弾幕と全プレイヤーの当たり判定 (逆走査で被弾バグを完全解消)
+            for (let ebIndex = enemyBullets.length - 1; ebIndex >= 0; ebIndex--) {
+                const eb = enemyBullets[ebIndex];
                 const ebDummy = { x: eb.x, y: eb.y, w: eb.w || 6, h: eb.h || 6 };
                 
-                lobbyPlayers.forEach(p => {
+                for (let pIndex = 0; pIndex < targets.length; pIndex++) {
+                    const p = targets[pIndex];
+                    if (p.hp <= 0) continue;
+
                     const pDummy = { x: p.x, y: p.y, w: 32, h: 32 };
                     if (checkCollide(pDummy, ebDummy)) {
                         p.hp = Math.max(0, p.hp - 10);
                         enemyBullets.splice(ebIndex, 1);
 
-                        if (p.peerId === userData.peerId) {
+                        // 自機（ソロ / ホスト本人）へのダメージ反映
+                        if (p.peerId === 'solo' || p.peerId === userData.peerId) {
                             player.hp = p.hp;
                             if (player.hp <= 0) gameOver();
                         }
+                        break; // 弾丸は消失
                     }
-                });
-            });
+                }
+            }
 
             // 粒子エフェクト
             particles.forEach((p, index) => {
@@ -2093,7 +2201,7 @@
             gameScore = hostState.score;
             giantBattleship = hostState.giantBattleship;
 
-            // ゲスト自身の最新HPを探す
+            // ゲスト自身の最新HPを探して適用
             const selfInHost = lobbyPlayers.find(p => p.peerId === userData.peerId);
             if (selfInHost) {
                 player.hp = selfInHost.hp;
